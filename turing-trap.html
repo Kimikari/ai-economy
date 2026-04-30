@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Turing Trap</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --card: #161b26;
+    --border: #2a3145;
+    --accent: #4f8ef7;
+    --accent2: #a78bfa;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --left: #f87171;
+    --right: #34d399;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+  .subtitle {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  #game-area {
+    width: 100%;
+    max-width: 700px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* BARS */
+  .bars-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .bars-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+  }
+  .bar-row { display: flex; flex-direction: column; gap: 4px; }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .bar-label span.val { color: var(--text); font-weight: 600; }
+  .bar-track {
+    position: relative;
+    height: 8px;
+    background: #1e2535;
+    border-radius: 4px;
+    overflow: visible;
+  }
+  .bar-range {
+    position: absolute;
+    top: 0; height: 100%;
+    background: rgba(52,211,153,0.15);
+    border-left: 1px solid rgba(52,211,153,0.4);
+    border-right: 1px solid rgba(52,211,153,0.4);
+    border-radius: 4px;
+  }
+  .bar-fill {
+    position: absolute;
+    top: 0; left: 0; height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .bar-fill.in-range { background: var(--good); }
+  .bar-fill.below { background: var(--bad); }
+  .bar-fill.above { background: var(--warn); }
+  .productivity-row { grid-column: 1 / -1; }
+
+  /* TURN + DANGER */
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+    padding: 0 2px;
+  }
+  .danger-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .danger-tag {
+    font-size: 0.68rem;
+    background: rgba(248,113,113,0.15);
+    color: var(--bad);
+    border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+
+  /* CARD */
+  .card-wrapper {
+    perspective: 800px;
+    position: relative;
+    min-height: 220px;
+  }
+  .event-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 22px 16px;
+    position: relative;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+  }
+  .event-card.tilt-left { transform: rotate(-3deg); box-shadow: -6px 4px 20px rgba(248,113,113,0.2); }
+  .event-card.tilt-right { transform: rotate(3deg); box-shadow: 6px 4px 20px rgba(52,211,153,0.2); }
+  .card-tag {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+  .card-desc { font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
+  .choice-hint {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 14px;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .choice-hint .left-hint { color: var(--left); }
+  .choice-hint .right-hint { color: var(--right); }
+
+  /* EXPLANATION overlay */
+  .explanation-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(13,15,20,0.92);
+    border-radius: 12px;
+    padding: 22px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    backdrop-filter: blur(4px);
+  }
+  .explanation-overlay.visible { display: flex; }
+  .explanation-text { font-size: 0.85rem; color: #cbd5e1; line-height: 1.6; }
+  .effect-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .effect-chip {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .effect-chip.pos { background: rgba(52,211,153,0.15); color: var(--good); border: 1px solid rgba(52,211,153,0.3); }
+  .effect-chip.neg { background: rgba(248,113,113,0.15); color: var(--bad); border: 1px solid rgba(248,113,113,0.3); }
+  .effect-chip.neu { background: rgba(100,116,139,0.15); color: var(--muted); border: 1px solid rgba(100,116,139,0.3); }
+
+  /* BUTTONS */
+  .choice-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 12px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    line-height: 1.3;
+    text-align: center;
+  }
+  .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn-left { background: rgba(248,113,113,0.15); color: var(--left); border: 1px solid rgba(248,113,113,0.4); }
+  .btn-right { background: rgba(52,211,153,0.15); color: var(--right); border: 1px solid rgba(52,211,153,0.4); }
+  .btn-next {
+    grid-column: 1 / -1;
+    background: var(--accent);
+    color: #0d0f14;
+    margin-top: 2px;
+  }
+  .btn-restart {
+    background: var(--accent2);
+    color: #0d0f14;
+    padding: 10px 28px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-top: 12px;
+  }
+
+  /* GRAPH */
+  .graph-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .graph-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+  .legend { display: flex; gap: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.68rem; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  canvas#graph { width: 100%; height: 90px; display: block; }
+
+  /* END SCREEN */
+  #end-screen {
+    display: none;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 700px;
+    gap: 14px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  #end-screen.visible { display: flex; }
+  .end-title { font-size: 1.4rem; font-weight: 800; color: var(--accent); }
+  .end-class { font-size: 1rem; font-weight: 700; color: var(--accent2); margin-top: -6px; }
+  .end-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+    width: 100%;
+    text-align: left;
+  }
+  .stat-box {
+    background: #1a2030;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .stat-box .s-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-box .s-val { font-size: 1.4rem; font-weight: 700; margin-top: 2px; }
+  .end-desc { font-size: 0.85rem; color: #94a3b8; line-height: 1.6; max-width: 520px; }
+  .thesis {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--muted);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    text-align: left;
+    border-radius: 0 6px 6px 0;
+    background: rgba(79,142,247,0.06);
+  }
+
+  /* FAILURE */
+  .fail-title { font-size: 1.4rem; font-weight: 800; color: var(--bad); }
+
+  @media (max-width: 480px) {
+    .bars-grid { grid-template-columns: 1fr; }
+    .productivity-row { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<h1>THE TURING TRAP</h1>
+<p class="subtitle">Govern the AI transition. Productivity alone is not enough.</p>
+
+<div id="game-area">
+  <div class="hud">
+    <span id="turn-label">Turn 1 / 20</span>
+    <div class="danger-tags" id="danger-tags"></div>
+  </div>
+
+  <!-- BARS -->
+  <div class="bars-panel">
+    <div class="bars-grid">
+      <div class="bar-row productivity-row">
+        <div class="bar-label">
+          <span>Productivity <span style="color:var(--muted);font-size:0.65em">(higher = better)</span></span>
+          <span class="val" id="v-productivity">40</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill in-range" id="b-productivity" style="width:40%"></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Worker Power</span><span class="val" id="v-workerPower">50</span></div>
+        <div class="bar-track">
+          <div class="bar-range" style="left:30%;width:45%"></div>
+          <div class="bar-fill in-range" id="b-workerPower" style="width:50%"></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Skill Growth</span><span class="val" id="v-skillGrowth">50</span></div>
+        <div class="bar-track">
+          <div class="bar-range" style="left:35%;width:50%"></div>
+          <div class="bar-fill in-range" id="b-skillGrowth" style="width:50%"></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Ownership Conc.</span><span class="val" id="v-ownership">45</span></div>
+        <div class="bar-track">
+          <div class="bar-range" style="left:20%;width:50%"></div>
+          <div class="bar-fill in-range" id="b-ownership" style="width:45%"></div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Public Trust</span><span class="val" id="v-publicTrust">50</span></div>
+        <div class="bar-track">
+          <div class="bar-range" style="left:25%;width:55%"></div>
+          <div class="bar-fill in-range" id="b-publicTrust" style="width:50%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD -->
+  <div class="card-wrapper" id="card-wrapper">
+    <div class="event-card" id="event-card">
+      <div class="card-tag" id="card-tag">Event</div>
+      <div class="card-title" id="card-title">Loading...</div>
+      <div class="card-desc" id="card-desc"></div>
+      <div class="choice-hint">
+        <span class="left-hint" id="hint-left"></span>
+        <span class="right-hint" id="hint-right"></span>
+      </div>
+      <div class="explanation-overlay" id="explanation-overlay">
+        <div class="effect-list" id="effect-list"></div>
+        <div class="explanation-text" id="explanation-text"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="choice-buttons" id="choice-buttons">
+    <button class="btn btn-left" id="btn-left" onclick="choose('left')"></button>
+    <button class="btn btn-right" id="btn-right" onclick="choose('right')"></button>
+    <button class="btn btn-next" id="btn-next" style="display:none" onclick="nextCard()">Next Event →</button>
+  </div>
+
+  <!-- GRAPH -->
+  <div class="graph-panel">
+    <div class="graph-title">
+      Value Distribution Over Time
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4f8ef7"></div>Workers</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Owners</div>
+      </div>
+    </div>
+    <canvas id="graph" height="90"></canvas>
+  </div>
+</div>
+
+<!-- END SCREEN -->
+<div id="end-screen">
+  <div id="end-title-el" class="end-title">Game Over</div>
+  <div id="end-class-el" class="end-class"></div>
+  <div class="end-stats">
+    <div class="stat-box"><div class="s-label">Final Productivity</div><div class="s-val" id="es-prod" style="color:var(--good)">-</div></div>
+    <div class="stat-box"><div class="s-label">Worker Value</div><div class="s-val" id="es-worker" style="color:var(--accent)">-</div></div>
+    <div class="stat-box"><div class="s-label">Owner Value</div><div class="s-val" id="es-owner" style="color:var(--accent2)">-</div></div>
+    <div class="stat-box"><div class="s-label">Inequality Index</div><div class="s-val" id="es-ineq" style="color:var(--warn)">-</div></div>
+  </div>
+  <div id="end-desc-el" class="end-desc"></div>
+  <div class="thesis">"Generative AI is not automatically good or bad. Its social effect depends on whether it is deployed to replace human labor or augment human capability. Productivity alone does not guarantee shared prosperity."<br>— inspired by Erik Brynjolfsson, <em>The Turing Trap</em></div>
+  <button class="btn-restart" onclick="restartGame()">Play Again</button>
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const RANGES = {
+  workerPower:  { min: 30, max: 75 },
+  skillGrowth:  { min: 35, max: 85 },
+  ownership:    { min: 20, max: 70 },
+  publicTrust:  { min: 25, max: 80 },
+};
+
+let state = {};
+let turnIndex = 0;
+let choiceMade = false;
+let cardOrder = [];
+let workerHistory = [];
+let ownerHistory = [];
+
+// How many consecutive-total turns each bar has been out of range
+// (not consecutive — cumulative failures)
+let outOfRangeCounts = { workerPower: 0, skillGrowth: 0, ownership: 0, publicTrust: 0 };
+
+function initState() {
+  state = {
+    productivity:   40,
+    workerPower:    50,
+    skillGrowth:    50,
+    ownership:      45,
+    publicTrust:    50,
+    // hidden
+    automationScore:  0,
+    augmentationScore: 0,
+    workerValue:    50,
+    ownerValue:     50,
+    inequality:     0,
+  };
+  workerHistory = [50];
+  ownerHistory  = [50];
+  outOfRangeCounts = { workerPower: 0, skillGrowth: 0, ownership: 0, publicTrust: 0 };
+  turnIndex = 0;
+  choiceMade = false;
+  // shuffle card deck
+  cardOrder = shuffle([...Array(EVENTS.length).keys()]);
+}
+
+function clamp(v, lo=0, hi=100) { return Math.max(lo, Math.min(hi, v)); }
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ─── EVENT CARDS ──────────────────────────────────────────────────────────────
+// Each card: { tag, title, desc, left: {label, effects, hidden, explain}, right: {...} }
+// effects keys: productivity, workerPower, skillGrowth, ownership, publicTrust
+// hidden keys: automationScore, augmentationScore, workerValue, ownerValue, inequality
+const EVENTS = [
+  {
+    tag: "Corporate Deployment",
+    title: "Customer Support Rollout",
+    desc: "A major retailer wants to deploy generative AI across its entire customer service operation.",
+    left: {
+      label: "Fully automate first-response emails",
+      effects: { productivity: +8, workerPower: -10, skillGrowth: -4, ownership: +5, publicTrust: -3 },
+      hidden: { automationScore: +3, ownerValue: +10, workerValue: -6 },
+      explain: "Substituting AI for routine human labor raises output but strips bargaining power from service workers. The productivity gain flows predominantly to capital."
+    },
+    right: {
+      label: "Use AI to brief human agents before each call",
+      effects: { productivity: +5, workerPower: +3, skillGrowth: +6, ownership: +1, publicTrust: +4 },
+      hidden: { augmentationScore: +3, workerValue: +6, ownerValue: +4 },
+      explain: "AI as a complement raises agent effectiveness. Workers become more capable, trust builds, and gains are more evenly shared."
+    }
+  },
+  {
+    tag: "Education",
+    title: "AI Tutoring in Schools",
+    desc: "A national ed-tech initiative proposes AI tutoring across public schools. Two implementation models are on the table.",
+    left: {
+      label: "Replace remedial teachers with AI modules",
+      effects: { productivity: +4, workerPower: -6, skillGrowth: -7, ownership: +4, publicTrust: -5 },
+      hidden: { automationScore: +2, ownerValue: +7, workerValue: -4, inequality: +4 },
+      explain: "Cutting teachers saves costs but depresses skill formation long-term. Students learn to depend on AI rather than developing metacognition."
+    },
+    right: {
+      label: "Give teachers AI dashboards to personalize learning",
+      effects: { productivity: +3, workerPower: +4, skillGrowth: +10, ownership: +2, publicTrust: +6 },
+      hidden: { augmentationScore: +4, workerValue: +7, ownerValue: +3 },
+      explain: "Teachers augmented with AI data identify struggling students earlier. Skill growth accelerates. Trust in public institutions rises."
+    }
+  },
+  {
+    tag: "Healthcare",
+    title: "Hospital Triage AI",
+    desc: "Hospitals are offered an AI that can flag high-risk patients from intake data within seconds.",
+    left: {
+      label: "Allow AI to make triage decisions autonomously",
+      effects: { productivity: +9, workerPower: -5, skillGrowth: -6, ownership: +6, publicTrust: -8 },
+      hidden: { automationScore: +3, ownerValue: +9, workerValue: -5, inequality: +3 },
+      explain: "Autonomous triage speeds throughput but erodes clinical judgment over time. A single high-profile error triggers a public backlash."
+    },
+    right: {
+      label: "Use AI as a second opinion for nurses and doctors",
+      effects: { productivity: +7, workerPower: +5, skillGrowth: +7, ownership: +3, publicTrust: +5 },
+      hidden: { augmentationScore: +4, workerValue: +8, ownerValue: +5 },
+      explain: "Clinicians catch AI blind spots; AI catches human fatigue. Outcomes improve and the profession gains rather than loses esteem."
+    }
+  },
+  {
+    tag: "Tech Industry",
+    title: "AI Coding Assistants",
+    desc: "A leading IDE maker wants to deploy AI coding assistance across the software industry.",
+    left: {
+      label: "Offer full code generation — minimize human input",
+      effects: { productivity: +10, workerPower: -8, skillGrowth: -9, ownership: +7, publicTrust: -2 },
+      hidden: { automationScore: +4, ownerValue: +12, workerValue: -7, inequality: +5 },
+      explain: "Junior developers become unnecessary. Senior engineers' scope widens but the career pipeline thins. Long-term, the talent pool shrinks."
+    },
+    right: {
+      label: "Position the tool as a pair programmer, not a replacement",
+      effects: { productivity: +8, workerPower: +4, skillGrowth: +8, ownership: +4, publicTrust: +3 },
+      hidden: { augmentationScore: +4, workerValue: +9, ownerValue: +7 },
+      explain: "Developers with AI become faster and learn from suggestions. The tool expands what individual engineers can build, raising demand for the profession."
+    }
+  },
+  {
+    tag: "Legal Sector",
+    title: "Legal Document Generation",
+    desc: "Law firms are deploying AI to draft contracts and filings. Should this be regulated?",
+    left: {
+      label: "Allow fully automated legal document delivery",
+      effects: { productivity: +7, workerPower: -9, skillGrowth: -5, ownership: +8, publicTrust: -6 },
+      hidden: { automationScore: +3, ownerValue: +10, workerValue: -8, inequality: +6 },
+      explain: "Paralegals and junior associates are displaced. Access to law improves for consumers but legal expertise concentrates at the top of the profession."
+    },
+    right: {
+      label: "Require lawyer review of all AI-drafted documents",
+      effects: { productivity: +4, workerPower: +6, skillGrowth: +4, ownership: +2, publicTrust: +5 },
+      hidden: { augmentationScore: +3, workerValue: +6, ownerValue: +4 },
+      explain: "Lawyers become more productive, not fewer. Human oversight maintains accountability and public confidence in the legal system."
+    }
+  },
+  {
+    tag: "Human Resources",
+    title: "AI Hiring Tools",
+    desc: "A coalition of employers wants to use AI screening for all entry-level job applications.",
+    left: {
+      label: "Deploy AI screening with no human review",
+      effects: { productivity: +5, workerPower: -7, skillGrowth: -3, ownership: +4, publicTrust: -9 },
+      hidden: { automationScore: +2, ownerValue: +6, workerValue: -9, inequality: +7 },
+      explain: "Efficiency rises but bias incidents spike. A viral discrimination case collapses public trust in algorithmic hiring broadly."
+    },
+    right: {
+      label: "Use AI to expand candidate pools for human reviewers",
+      effects: { productivity: +3, workerPower: +5, skillGrowth: +3, ownership: +1, publicTrust: +4 },
+      hidden: { augmentationScore: +2, workerValue: +5, ownerValue: +3 },
+      explain: "AI surfaces overlooked candidates; humans make final calls. Diversity improves and the process feels fairer to applicants."
+    }
+  },
+  {
+    tag: "Logistics",
+    title: "Warehouse Automation Wave",
+    desc: "A logistics giant is planning full robotic automation of its distribution centers.",
+    left: {
+      label: "Proceed with full automation immediately",
+      effects: { productivity: +12, workerPower: -13, skillGrowth: -5, ownership: +9, publicTrust: -7 },
+      hidden: { automationScore: +5, ownerValue: +15, workerValue: -12, inequality: +9 },
+      explain: "Throughput soars. Workers in affected regions face mass displacement. The efficiency gains are real but land entirely with shareholders."
+    },
+    right: {
+      label: "Phase automation with worker transition programs",
+      effects: { productivity: +7, workerPower: -2, skillGrowth: +6, ownership: +5, publicTrust: +2 },
+      hidden: { augmentationScore: +2, automationScore: +2, ownerValue: +9, workerValue: +1 },
+      explain: "Slower rollout includes retraining for robotic maintenance and logistics coordination. Productivity still rises, and displacement is managed."
+    }
+  },
+  {
+    tag: "Creative Economy",
+    title: "Creative Industry Attribution Rules",
+    desc: "Artists and musicians are demanding that AI training data attribution rules be legally enforced.",
+    left: {
+      label: "Oppose attribution requirements as innovation barriers",
+      effects: { productivity: +4, workerPower: -8, skillGrowth: -4, ownership: +6, publicTrust: -10 },
+      hidden: { automationScore: +2, ownerValue: +8, workerValue: -10, inequality: +6 },
+      explain: "AI model makers benefit. Creative workers lose income and recognition. Public outrage builds as prominent artists go public."
+    },
+    right: {
+      label: "Mandate attribution and opt-in licensing",
+      effects: { productivity: +1, workerPower: +7, skillGrowth: +5, ownership: -3, publicTrust: +8 },
+      hidden: { augmentationScore: +3, workerValue: +8, ownerValue: -2 },
+      explain: "Slower model training but a sustainable ecosystem. Creators earn from AI use of their work. The legitimacy of the AI economy rises."
+    }
+  },
+  {
+    tag: "Open Source",
+    title: "Open-Source AI Models",
+    desc: "A consortium wants to release a frontier-scale language model under an open license.",
+    left: {
+      label: "Release with full weights and no restrictions",
+      effects: { productivity: +6, workerPower: +4, skillGrowth: +5, ownership: -8, publicTrust: -4 },
+      hidden: { augmentationScore: +2, workerValue: +5, ownerValue: -3, inequality: -5 },
+      explain: "Decentralization is good for competition, but misuse proliferates quickly. Trust dips as deepfakes and scam models appear within weeks."
+    },
+    right: {
+      label: "Open-source with usage auditing requirements",
+      effects: { productivity: +4, workerPower: +3, skillGrowth: +6, ownership: -4, publicTrust: +3 },
+      hidden: { augmentationScore: +3, workerValue: +4, ownerValue: -1 },
+      explain: "Broader access with accountability. Small businesses and researchers gain capability without uncontrolled misuse."
+    }
+  },
+  {
+    tag: "Frontier AI",
+    title: "Proprietary Model Licensing",
+    desc: "A frontier AI lab is proposing exclusive enterprise licensing for its most capable model.",
+    left: {
+      label: "Approve exclusive licensing deal",
+      effects: { productivity: +8, workerPower: -4, skillGrowth: +2, ownership: +11, publicTrust: -5 },
+      hidden: { automationScore: +2, ownerValue: +12, workerValue: -4, inequality: +8 },
+      explain: "The most capable AI concentrates with the wealthiest buyers. Productivity rises for early adopters. The capability gap between large and small firms widens."
+    },
+    right: {
+      label: "Require interoperability and tiered public access",
+      effects: { productivity: +5, workerPower: +2, skillGrowth: +5, ownership: -4, publicTrust: +6 },
+      hidden: { augmentationScore: +3, workerValue: +4, ownerValue: +4 },
+      explain: "Slower revenue for the lab but broader diffusion of capability. Smaller firms access tools that improve their workers' productivity."
+    }
+  },
+  {
+    tag: "Labor Policy",
+    title: "Worker Retraining Program",
+    desc: "The government is designing a national program to help workers displaced by AI automation.",
+    left: {
+      label: "Fund short-term job placement only",
+      effects: { productivity: +2, workerPower: -5, skillGrowth: -6, ownership: +1, publicTrust: -4 },
+      hidden: { workerValue: -4, ownerValue: +2 },
+      explain: "Quick placement without deep skill development. Workers end up in lower-wage roles. The program is criticized as inadequate."
+    },
+    right: {
+      label: "Fund 18-month augmentation skills programs",
+      effects: { productivity: +3, workerPower: +8, skillGrowth: +11, ownership: -2, publicTrust: +7 },
+      hidden: { augmentationScore: +3, workerValue: +9, ownerValue: +1 },
+      explain: "Workers gain AI-adjacent skills that are complementary to automation. Long-term wage floors rise. The program becomes a model for other nations."
+    }
+  },
+  {
+    tag: "Economic Policy",
+    title: "AI Productivity-Sharing Policy",
+    desc: "A proposed policy would require companies above a certain size to share productivity gains from AI with their workers.",
+    left: {
+      label: "Oppose the policy — leave distribution to markets",
+      effects: { productivity: +5, workerPower: -9, skillGrowth: -2, ownership: +7, publicTrust: -6 },
+      hidden: { automationScore: +1, ownerValue: +10, workerValue: -8, inequality: +9 },
+      explain: "Firms capture gains internally. Investor returns spike. A growing share of the population earns AI-driven income only as consumers, not producers."
+    },
+    right: {
+      label: "Enact the policy with flexible implementation",
+      effects: { productivity: +2, workerPower: +9, skillGrowth: +4, ownership: -4, publicTrust: +8 },
+      hidden: { augmentationScore: +2, workerValue: +10, ownerValue: +2 },
+      explain: "Wages rise with productivity. Consumer spending strengthens. Firms complain but compliance costs are manageable."
+    }
+  },
+  {
+    tag: "Regulation",
+    title: "Human-in-the-Loop Requirements",
+    desc: "Regulators are considering mandating human oversight for all high-stakes AI decisions.",
+    left: {
+      label: "Limit oversight rules to medical and criminal domains only",
+      effects: { productivity: +6, workerPower: -4, skillGrowth: -3, ownership: +5, publicTrust: -3 },
+      hidden: { automationScore: +2, ownerValue: +7, workerValue: -3 },
+      explain: "Narrow rules allow rapid automation in financial, hiring, and welfare systems. Efficiency gains come with quiet accountability gaps."
+    },
+    right: {
+      label: "Require human review for all consequential automated decisions",
+      effects: { productivity: +1, workerPower: +6, skillGrowth: +5, ownership: -2, publicTrust: +9 },
+      hidden: { augmentationScore: +4, workerValue: +7, ownerValue: -1 },
+      explain: "Slower deployment but sustained legitimacy. Human reviewers develop expertise in AI-adjacent roles rather than being eliminated by them."
+    }
+  },
+  {
+    tag: "Enterprise AI",
+    title: "Autonomous Agents in Offices",
+    desc: "Companies are deploying autonomous AI agents that can manage email, scheduling, and workflows independently.",
+    left: {
+      label: "Allow fully autonomous office agents",
+      effects: { productivity: +11, workerPower: -11, skillGrowth: -8, ownership: +8, publicTrust: -5 },
+      hidden: { automationScore: +5, ownerValue: +13, workerValue: -11, inequality: +7 },
+      explain: "White-collar productivity soars. Middle management and administrative workers face sharp displacement. The office economy bifurcates."
+    },
+    right: {
+      label: "Deploy agents as delegation tools for human workers",
+      effects: { productivity: +7, workerPower: +3, skillGrowth: +7, ownership: +4, publicTrust: +3 },
+      hidden: { augmentationScore: +4, workerValue: +7, ownerValue: +7 },
+      explain: "Workers who direct agents become more productive, not redundant. The skill premium for effective human-AI coordination rises."
+    }
+  },
+  {
+    tag: "Public Sector",
+    title: "Public-Sector AI Procurement",
+    desc: "The government is procuring AI tools for social services, benefits administration, and tax collection.",
+    left: {
+      label: "Prioritize cost savings and full automation",
+      effects: { productivity: +7, workerPower: -7, skillGrowth: -5, ownership: +6, publicTrust: -7 },
+      hidden: { automationScore: +3, ownerValue: +8, workerValue: -7, inequality: +5 },
+      explain: "Government headcount falls. Citizens encounter automated denial systems with few appeal pathways. Trust in public institutions erodes."
+    },
+    right: {
+      label: "Use AI to improve caseworker decision quality",
+      effects: { productivity: +4, workerPower: +5, skillGrowth: +6, ownership: +1, publicTrust: +7 },
+      hidden: { augmentationScore: +3, workerValue: +6, ownerValue: +2 },
+      explain: "Caseworkers handle more complex cases. Citizens receive better outcomes. Public trust in technology-augmented government grows."
+    }
+  },
+  {
+    tag: "Crisis Event",
+    title: "AI Misinformation Scandal",
+    desc: "A major AI-generated disinformation campaign has been uncovered, attributed to commercial generative AI tools.",
+    left: {
+      label: "Downplay the incident; avoid regulatory response",
+      effects: { productivity: +2, workerPower: -3, skillGrowth: -2, ownership: +3, publicTrust: -14 },
+      hidden: { automationScore: +1, ownerValue: +2, workerValue: -4, inequality: +2 },
+      explain: "The industry avoids regulation in the short run. But a second incident six months later triggers a disproportionate backlash that damages the whole sector."
+    },
+    right: {
+      label: "Support transparency standards and provenance tools",
+      effects: { productivity: -1, workerPower: +3, skillGrowth: +4, ownership: -3, publicTrust: +9 },
+      hidden: { augmentationScore: +2, workerValue: +3, ownerValue: -1 },
+      explain: "Slowing deployment briefly to establish provenance standards rebuilds credibility. The public re-engages with AI tools on better terms."
+    }
+  },
+  {
+    tag: "Antitrust",
+    title: "Antitrust Investigation",
+    desc: "Regulators are investigating whether three AI platform companies have unlawfully consolidated the market.",
+    left: {
+      label: "Allow consolidation in exchange for safety commitments",
+      effects: { productivity: +5, workerPower: -5, skillGrowth: +2, ownership: +12, publicTrust: -6 },
+      hidden: { automationScore: +2, ownerValue: +11, workerValue: -5, inequality: +10 },
+      explain: "The companies invest in safety research. But market concentration means smaller firms and workers have fewer alternatives and less leverage."
+    },
+    right: {
+      label: "Break up dominant AI platforms",
+      effects: { productivity: -2, workerPower: +5, skillGrowth: +3, ownership: -10, publicTrust: +7 },
+      hidden: { augmentationScore: +2, workerValue: +6, ownerValue: -6 },
+      explain: "Short-term disruption. Medium-term, competitive markets drive more diverse AI applications and reduce rent extraction from both workers and consumers."
+    }
+  },
+  {
+    tag: "Safety",
+    title: "AI Safety Audit Requirements",
+    desc: "A proposed international framework would require independent safety audits before deploying any large AI model.",
+    left: {
+      label: "Reject audits as too slow and costly",
+      effects: { productivity: +7, workerPower: -2, skillGrowth: +1, ownership: +5, publicTrust: -7 },
+      hidden: { automationScore: +2, ownerValue: +7, workerValue: -3 },
+      explain: "Deployment accelerates. But two high-profile failures over the following year sharply erode the public mandate for continued expansion."
+    },
+    right: {
+      label: "Adopt tiered mandatory audits",
+      effects: { productivity: +2, workerPower: +3, skillGrowth: +4, ownership: -2, publicTrust: +8 },
+      hidden: { augmentationScore: +3, workerValue: +4, ownerValue: +1 },
+      explain: "Audits catch systemic risks early. A trusted compliance framework gives regulators confidence to allow faster expansion in the following years."
+    }
+  },
+  {
+    tag: "Labor Relations",
+    title: "Algorithmic Transparency Demand",
+    desc: "A major union is demanding the right to audit and challenge AI systems that affect hiring, scheduling, and performance reviews.",
+    left: {
+      label: "Refuse — algorithmic systems are proprietary",
+      effects: { productivity: +4, workerPower: -10, skillGrowth: -3, ownership: +6, publicTrust: -6 },
+      hidden: { automationScore: +2, ownerValue: +7, workerValue: -9, inequality: +6 },
+      explain: "Workers have no recourse against biased or exploitative systems. A strike over an unfair AI scheduling algorithm spreads to other sectors."
+    },
+    right: {
+      label: "Grant read-access with worker representation",
+      effects: { productivity: +1, workerPower: +10, skillGrowth: +5, ownership: -4, publicTrust: +7 },
+      hidden: { augmentationScore: +4, workerValue: +10, ownerValue: -2 },
+      explain: "Workers catch errors and improve system design. AI systems become more accurate. A new model of co-governance of workplace AI emerges."
+    }
+  },
+  {
+    tag: "Small Business",
+    title: "AI Tools for Small Businesses",
+    desc: "A government initiative is proposing subsidized access to AI tools for small and mid-sized businesses.",
+    left: {
+      label: "Let the market decide — no subsidies",
+      effects: { productivity: +4, workerPower: -3, skillGrowth: -2, ownership: +7, publicTrust: -3 },
+      hidden: { automationScore: +1, ownerValue: +6, workerValue: -3, inequality: +5 },
+      explain: "Large firms with existing AI capabilities widen their lead over small competitors. Productivity gains are real but unevenly distributed."
+    },
+    right: {
+      label: "Subsidize tiered access with training support",
+      effects: { productivity: +5, workerPower: +4, skillGrowth: +7, ownership: -5, publicTrust: +5 },
+      hidden: { augmentationScore: +4, workerValue: +5, ownerValue: +3 },
+      explain: "Small business workers gain AI tools that raise their productivity. Ownership concentration declines as the AI capability gap narrows."
+    }
+  },
+  {
+    tag: "Infrastructure",
+    title: "National Compute Subsidy",
+    desc: "A proposal to build national AI compute infrastructure available to universities, startups, and the public sector.",
+    left: {
+      label: "Contract compute out to private hyperscalers",
+      effects: { productivity: +8, workerPower: -3, skillGrowth: +3, ownership: +10, publicTrust: -2 },
+      hidden: { automationScore: +2, ownerValue: +11, workerValue: -3, inequality: +7 },
+      explain: "Fast deployment, but the national AI stack becomes dependent on a handful of private vendors who capture the strategic value."
+    },
+    right: {
+      label: "Build public compute infrastructure",
+      effects: { productivity: +4, workerPower: +3, skillGrowth: +8, ownership: -7, publicTrust: +6 },
+      hidden: { augmentationScore: +3, workerValue: +5, ownerValue: -2 },
+      explain: "Slower build but sovereign capability. Public researchers and startups can develop applications without depending on proprietary platforms."
+    }
+  },
+  {
+    tag: "Market Structure",
+    title: "Platform Merger",
+    desc: "Two of the largest AI infrastructure companies have proposed a merger. Regulators must decide.",
+    left: {
+      label: "Approve the merger with behavioral conditions",
+      effects: { productivity: +6, workerPower: -4, skillGrowth: +1, ownership: +12, publicTrust: -5 },
+      hidden: { automationScore: +2, ownerValue: +12, workerValue: -4, inequality: +9 },
+      explain: "Conditions are weakly enforced. The combined entity controls pricing across the AI stack and acquires every credible competitor."
+    },
+    right: {
+      label: "Block the merger",
+      effects: { productivity: +1, workerPower: +4, skillGrowth: +3, ownership: -9, publicTrust: +6 },
+      hidden: { augmentationScore: +2, workerValue: +5, ownerValue: -5 },
+      explain: "Both companies compete harder for talent, customers, and innovation. The market stays contestable."
+    }
+  },
+  {
+    tag: "Education Reform",
+    title: "Education Credential Reform",
+    desc: "With AI changing skill requirements rapidly, there's a debate about replacing degree requirements with competency assessments.",
+    left: {
+      label: "Eliminate degree requirements in favor of AI-scored tests",
+      effects: { productivity: +5, workerPower: -6, skillGrowth: -8, ownership: +4, publicTrust: -4 },
+      hidden: { automationScore: +2, ownerValue: +5, workerValue: -6, inequality: +5 },
+      explain: "Credential costs fall but depth of education declines. AI-scored tests reward optimization over genuine understanding, narrowing skill diversity."
+    },
+    right: {
+      label: "Reform credentials to include demonstrated AI collaboration skills",
+      effects: { productivity: +3, workerPower: +5, skillGrowth: +10, ownership: -1, publicTrust: +5 },
+      hidden: { augmentationScore: +4, workerValue: +6, ownerValue: +2 },
+      explain: "New credentials signal real human-AI collaboration capability. Graduates enter the workforce able to direct and improve AI systems, not just use them."
+    }
+  },
+  {
+    tag: "Technology",
+    title: "Augmentation AI Breakthrough",
+    desc: "A research lab has released a new class of AI tool specifically designed to enhance human decision-making rather than replace it.",
+    left: {
+      label: "Keep it in enterprise; premium pricing only",
+      effects: { productivity: +7, workerPower: -5, skillGrowth: +3, ownership: +8, publicTrust: -3 },
+      hidden: { automationScore: +1, ownerValue: +10, workerValue: -4, inequality: +7 },
+      explain: "High-wage workers get dramatically more productive. The capability gap between knowledge workers and everyone else widens sharply."
+    },
+    right: {
+      label: "Mandate broad public access including workers and educators",
+      effects: { productivity: +5, workerPower: +8, skillGrowth: +12, ownership: -3, publicTrust: +8 },
+      hidden: { augmentationScore: +6, workerValue: +10, ownerValue: +3 },
+      explain: "The augmentation dividend is widely distributed. Workers across sectors improve decision-making quality. This is the closest thing to a shared-prosperity AI path."
+    }
+  }
+];
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderBars() {
+  const bars = ['productivity','workerPower','skillGrowth','ownership','publicTrust'];
+  bars.forEach(key => {
+    const val = Math.round(state[key]);
+    document.getElementById('v-' + key).textContent = val;
+    const fill = document.getElementById('b-' + key);
+    fill.style.width = val + '%';
+    if (RANGES[key]) {
+      const { min, max } = RANGES[key];
+      fill.className = 'bar-fill ' + (val < min ? 'below' : val > max ? 'above' : 'in-range');
+    } else {
+      fill.className = 'bar-fill in-range';
+    }
+  });
+}
+
+function renderDangerTags() {
+  const el = document.getElementById('danger-tags');
+  el.innerHTML = '';
+  const labels = { workerPower: 'Worker Power', skillGrowth: 'Skill Growth', ownership: 'Ownership', publicTrust: 'Public Trust' };
+  Object.entries(outOfRangeCounts).forEach(([key, count]) => {
+    if (count > 0) {
+      const tag = document.createElement('span');
+      tag.className = 'danger-tag';
+      tag.textContent = `${labels[key]} ⚠ ${count}/3`;
+      el.appendChild(tag);
+    }
+  });
+}
+
+function renderCard(idx) {
+  const ev = EVENTS[cardOrder[idx]];
+  document.getElementById('card-tag').textContent = ev.tag;
+  document.getElementById('card-title').textContent = ev.title;
+  document.getElementById('card-desc').textContent = ev.desc;
+  document.getElementById('hint-left').textContent = '← ' + ev.left.label;
+  document.getElementById('hint-right').textContent = ev.right.label + ' →';
+  document.getElementById('btn-left').textContent = ev.left.label;
+  document.getElementById('btn-right').textContent = ev.right.label;
+  document.getElementById('explanation-overlay').classList.remove('visible');
+  document.getElementById('btn-next').style.display = 'none';
+  document.getElementById('btn-left').style.display = '';
+  document.getElementById('btn-right').style.display = '';
+  document.getElementById('event-card').className = 'event-card';
+  document.getElementById('turn-label').textContent = `Turn ${idx + 1} / 20`;
+}
+
+function renderGraph() {
+  const canvas = document.getElementById('graph');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const pts = workerHistory.length;
+  if (pts < 2) return;
+
+  const px = (i) => (i / (pts - 1)) * (W - 20) + 10;
+  const py = (v) => H - 4 - (v / 100) * (H - 8);
+
+  // grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  [25, 50, 75].forEach(v => {
+    ctx.beginPath(); ctx.moveTo(10, py(v)); ctx.lineTo(W - 10, py(v)); ctx.stroke();
+  });
+
+  // worker line
+  ctx.strokeStyle = '#4f8ef7';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  workerHistory.forEach((v, i) => { i === 0 ? ctx.moveTo(px(i), py(v)) : ctx.lineTo(px(i), py(v)); });
+  ctx.stroke();
+
+  // owner line
+  ctx.strokeStyle = '#a78bfa';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ownerHistory.forEach((v, i) => { i === 0 ? ctx.moveTo(px(i), py(v)) : ctx.lineTo(px(i), py(v)); });
+  ctx.stroke();
+}
+
+// ─── GAME LOGIC ───────────────────────────────────────────────────────────────
+function applyEffects(side) {
+  const ev = EVENTS[cardOrder[turnIndex]];
+  const choice = side === 'left' ? ev.left : ev.right;
+
+  // Apply visible effects
+  Object.entries(choice.effects).forEach(([k, v]) => {
+    state[k] = clamp(state[k] + v);
+  });
+
+  // Apply hidden effects (workerValue and ownerValue are tracked 0–100-ish as index)
+  Object.entries(choice.hidden).forEach(([k, v]) => {
+    if (k === 'automationScore' || k === 'augmentationScore') {
+      state[k] += v;
+    } else if (k === 'inequality') {
+      state[k] = clamp((state[k] || 0) + v, -100, 100);
+    } else {
+      state[k] = clamp(state[k] + v, 0, 150);
+    }
+  });
+
+  // Recompute inequality from divergence
+  state.inequality = clamp(state.ownerValue - state.workerValue, 0, 100);
+
+  // Track history for graph (clamped 0-100 for display)
+  workerHistory.push(clamp(state.workerValue, 0, 100));
+  ownerHistory.push(clamp(state.ownerValue, 0, 100));
+
+  // Check range violations — cumulative out-of-range turns
+  Object.keys(RANGES).forEach(key => {
+    const { min, max } = RANGES[key];
+    if (state[key] < min || state[key] > max) {
+      outOfRangeCounts[key]++;
+    }
+  });
+}
+
+function showExplanation(side) {
+  const ev = EVENTS[cardOrder[turnIndex]];
+  const choice = side === 'left' ? ev.left : ev.right;
+
+  const listEl = document.getElementById('effect-list');
+  listEl.innerHTML = '';
+  const visKeys = { productivity: 'Productivity', workerPower: 'Worker Power', skillGrowth: 'Skill Growth', ownership: 'Ownership', publicTrust: 'Public Trust' };
+  Object.entries(choice.effects).forEach(([k, v]) => {
+    const chip = document.createElement('span');
+    chip.className = 'effect-chip ' + (v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu');
+    chip.textContent = `${visKeys[k]} ${v > 0 ? '+' : ''}${v}`;
+    listEl.appendChild(chip);
+  });
+
+  document.getElementById('explanation-text').textContent = choice.explain;
+  document.getElementById('explanation-overlay').classList.add('visible');
+}
+
+function choose(side) {
+  if (choiceMade) return;
+  choiceMade = true;
+
+  // Card tilt animation
+  document.getElementById('event-card').className = 'event-card tilt-' + side;
+
+  applyEffects(side);
+  renderBars();
+  renderDangerTags();
+  renderGraph();
+  showExplanation(side);
+
+  document.getElementById('btn-left').style.display = 'none';
+  document.getElementById('btn-right').style.display = 'none';
+  document.getElementById('btn-next').style.display = '';
+
+  // Check end conditions
+  checkEndConditions();
+}
+
+function checkEndConditions() {
+  // Failure: any bar out of range for 3 total turns
+  const failMessages = {
+    workerPower: {
+      below: { title: "The Turing Trap", desc: "Workers have been systematically substituted by AI. Wages have collapsed, bargaining power is gone, and the gains from automation flow entirely to capital. You have fallen into the Turing Trap." },
+      above: { title: "Innovation Gridlock", desc: "Labor institutions have grown powerful enough to block nearly all AI adoption. Productivity stagnates and competitors abroad accelerate past you." }
+    },
+    skillGrowth: {
+      below: { title: "Deskilling Crisis", desc: "The workforce has become dependent on AI systems they cannot explain, audit, or improve. Human capability is eroding faster than it is being replaced." },
+      above: { title: "Training Without Deployment", desc: "Investment in skills has raced ahead of actual AI deployment. Workers are trained for tools that don't yet exist, and costs have crowded out productive investment." }
+    },
+    ownership: {
+      below: { title: "Fragmented Infrastructure", desc: "AI ownership is so dispersed that coordination is impossible. Critical AI infrastructure is unreliable, underfunded, and unable to support serious innovation." },
+      above: { title: "Monopoly Automation State", desc: "A handful of firms now control the AI stack. They set prices, shape regulation, and extract rents from everyone else. Political capture is nearly complete." }
+    },
+    publicTrust: {
+      below: { title: "Low-Trust Backlash", desc: "Public anger at AI has spilled into protests and political movements. Legitimacy is in crisis. Democratically elected governments are considering banning large AI systems outright." },
+      above: { title: "Reckless Overtrust", desc: "Society has adopted AI with uncritical enthusiasm. Scams, deepfakes, and algorithmic failures proliferate unchecked. When the reckoning arrives, it is severe." }
+    }
+  };
+
+  for (const [key, count] of Object.entries(outOfRangeCounts)) {
+    if (count >= 3) {
+      const val = state[key];
+      const { min, max } = RANGES[key];
+      const side = val < min ? 'below' : 'above';
+      const msg = failMessages[key][side];
+      setTimeout(() => showEndScreen(false, msg.title, msg.desc), 800);
+      return;
+    }
+  }
+
+  // Success: productivity 90+ and all stability bars in range
+  if (state.productivity >= 90) {
+    const allInRange = Object.keys(RANGES).every(k => {
+      const { min, max } = RANGES[k];
+      return state[k] >= min && state[k] <= max;
+    });
+    if (allInRange) {
+      setTimeout(() => showEndScreen(true, "High-Productivity Augmentation Economy", "You achieved strong productivity growth while keeping the economy socially stable. AI expanded human capability more than it replaced it."), 800);
+      return;
+    }
+  }
+
+  // Normal game end at turn 20
+  if (turnIndex >= 19) {
+    setTimeout(() => showEndScreen(true, null, null), 800);
+  }
+}
+
+function nextCard() {
+  if (turnIndex >= 19) { return; } // handled by checkEndConditions
+  turnIndex++;
+  choiceMade = false;
+  renderCard(turnIndex);
+}
+
+// ─── END SCREEN ───────────────────────────────────────────────────────────────
+function classifyOutcome() {
+  const { automationScore, augmentationScore, productivity, workerValue, ownerValue } = state;
+  const allInRange = Object.keys(RANGES).every(k => {
+    const { min, max } = RANGES[k];
+    return state[k] >= min && state[k] <= max;
+  });
+  const augDominant = augmentationScore > automationScore * 1.3;
+  const autoDominant = automationScore > augmentationScore * 1.3;
+  const highProd = productivity >= 75;
+  const ownerCaptures = ownerValue > workerValue + 20;
+
+  if (!allInRange && ownerCaptures && autoDominant) return { cls: "Monopoly Automation State", desc: "Automation drove productivity but concentrated gains with capital. Social stability failed under the weight of inequality." };
+  if (!allInRange && state.publicTrust < RANGES.publicTrust.min) return { cls: "Low-Trust Backlash State", desc: "Rapid AI deployment without accountability eroded public legitimacy. The economy is productive but politically unstable." };
+  if (!allInRange && state.skillGrowth < RANGES.skillGrowth.min) return { cls: "Deskilling Crisis", desc: "AI replaced human judgment faster than it trained new capabilities. The workforce lost depth that won't easily be rebuilt." };
+  if (!allInRange && state.workerPower < RANGES.workerPower.min) return { cls: "The Turing Trap", desc: "Workers became substitutes rather than complements. Productivity rose but wages and bargaining power did not follow." };
+  if (highProd && augDominant && allInRange) return { cls: "High-Productivity Augmentation Economy", desc: "You found a path where AI raised human capability and productivity together. Gains were broadly shared." };
+  if (augDominant && allInRange) return { cls: "Mostly Augmentation Economy", desc: "AI was deployed as a complement. Social stability held, though productivity growth was moderate." };
+  if (autoDominant && allInRange) return { cls: "Mixed Economy (Automation-Leaning)", desc: "Automation dominated but stability bars held — for now. The structural tensions are real and unresolved." };
+  return { cls: "Mixed Economy", desc: "A balance of automation and augmentation choices produced a stable but unspectacular outcome." };
+}
+
+function showEndScreen(win, overrideTitle, overrideDesc) {
+  document.getElementById('game-area').style.display = 'none';
+  const es = document.getElementById('end-screen');
+  es.classList.add('visible');
+
+  let title, desc, clsLabel;
+  if (overrideTitle) {
+    title = win ? "You Survived" : "Game Over";
+    clsLabel = overrideTitle;
+    desc = overrideDesc;
+  } else {
+    const outcome = classifyOutcome();
+    title = "Simulation Complete";
+    clsLabel = outcome.cls;
+    desc = outcome.desc;
+  }
+
+  const titleEl = document.getElementById('end-title-el');
+  titleEl.textContent = title;
+  titleEl.className = win ? 'end-title' : 'fail-title';
+  document.getElementById('end-class-el').textContent = clsLabel;
+  document.getElementById('end-desc-el').textContent = desc;
+
+  document.getElementById('es-prod').textContent = Math.round(state.productivity);
+  document.getElementById('es-worker').textContent = Math.round(clamp(state.workerValue, 0, 100));
+  document.getElementById('es-owner').textContent = Math.round(clamp(state.ownerValue, 0, 100));
+  document.getElementById('es-ineq').textContent = Math.round(clamp(state.inequality, 0, 100));
+}
+
+// ─── RESTART ──────────────────────────────────────────────────────────────────
+function restartGame() {
+  document.getElementById('end-screen').classList.remove('visible');
+  document.getElementById('game-area').style.display = '';
+  initState();
+  renderBars();
+  renderDangerTags();
+  renderCard(0);
+  renderGraph();
+}
+
+// ─── SWIPE SUPPORT ────────────────────────────────────────────────────────────
+let touchStartX = 0;
+const card = document.getElementById('event-card');
+card.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+card.addEventListener('touchend', e => {
+  if (choiceMade) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 60) choose(dx < 0 ? 'left' : 'right');
+});
+
+// Hover tilt
+document.getElementById('btn-left').addEventListener('mouseenter', () => {
+  if (!choiceMade) document.getElementById('event-card').classList.add('tilt-left');
+});
+document.getElementById('btn-left').addEventListener('mouseleave', () => {
+  if (!choiceMade) document.getElementById('event-card').className = 'event-card';
+});
+document.getElementById('btn-right').addEventListener('mouseenter', () => {
+  if (!choiceMade) document.getElementById('event-card').classList.add('tilt-right');
+});
+document.getElementById('btn-right').addEventListener('mouseleave', () => {
+  if (!choiceMade) document.getElementById('event-card').className = 'event-card';
+});
+
+// Resize graph on window resize
+window.addEventListener('resize', renderGraph);
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+initState();
+renderBars();
+renderCard(0);
+renderGraph();
+</script>
+</body>
+</html>
